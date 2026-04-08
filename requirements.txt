@@ -1,0 +1,16 @@
+sqlalchemy
+sqlalchemy[asyncio]
+asyncpg
+pg8000
+flask
+python-dotenv
+pandas
+gunicorn
+vertexai
+mcp
+httpx
+google-auth
+google-cloud-aiplatform
+google-api-python-client
+google-auth-httplib2
+google-auth-oauthlib 

@@ -1,0 +1,2781 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>AgroSync</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=Outfit:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/js/all.min.js" defer></script>
+
+    <!-- Markdown + Sanitize -->
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.3/purify.min.js"></script>
+
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+
+    <!-- Google Maps — loaded dynamically after /config fetch -->
+    <script>window.__mapsLoaded = false;</script>
+
+    <style>
+    /* ═══════════════════════════════════════════════════════
+       TOKENS
+    ═══════════════════════════════════════════════════════ */
+    :root {
+        --bg-void:          #0f1419;
+        --bg-surface:       #161b22;
+        --bg-raised:        #1c2128;
+        --bg-glass:         rgba(22, 27, 34, 0.9);
+        --border:           rgba(255,255,255,0.06);
+        --border-strong:    rgba(255,255,255,0.1);
+        --accent:           #8de4ad;
+        --accent-dim:       rgba(141,228,173,0.08);
+        --accent-glow:      rgba(141,228,173,0.15);
+        --google-blue:      #4285f4;
+        --google-blue-dim:  rgba(66, 133, 244, 0.1);
+        --text-primary:     #d1d5db;
+        --text-secondary:   #8b949e;
+        --text-muted:       #484f58;
+        --red:              #f85149;
+        --sidebar-w:        270px;
+        --intel-w:          340px;
+        --header-h:         60px;
+        --radius:           10px;
+        --radius-lg:        14px;
+        --shadow-card:      0 2px 12px rgba(0,0,0,0.3);
+        --shadow-modal:     0 16px 48px rgba(0,0,0,0.5);
+        --font-ui:          'Outfit', sans-serif;
+        --font-display:     'Syne', sans-serif;
+        --font-mono:        'JetBrains Mono', monospace;
+        --transition:       all 0.18s ease;
+    }
+
+    /* Light mode — auto OS theme */
+    @media (prefers-color-scheme: light) {
+        :root {
+            --bg-void:         #f6f8fa;
+            --bg-surface:      #ffffff;
+            --bg-raised:       #f0f2f5;
+            --bg-glass:        rgba(255,255,255,0.92);
+            --border:          rgba(0,0,0,0.06);
+            --border-strong:   rgba(0,0,0,0.1);
+            --accent:          #16a34a;
+            --accent-dim:      rgba(22,163,74,0.06);
+            --accent-glow:     rgba(22,163,74,0.1);
+            --google-blue:     #1a73e8;
+            --google-blue-dim: rgba(26,115,232,0.06);
+            --text-primary:    #1f2328;
+            --text-secondary:  #57606a;
+            --text-muted:      #8b949e;
+            --red:             #cf222e;
+            --shadow-card:     0 1px 4px rgba(0,0,0,0.06);
+            --shadow-modal:    0 8px 30px rgba(0,0,0,0.12);
+        }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESET & BASE
+    ═══════════════════════════════════════════════════════ */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+        font-family: var(--font-ui);
+        background: var(--bg-void);
+        color: var(--text-primary);
+        height: 100dvh;
+        display: flex;
+        overflow: hidden;
+        font-size: 15px;
+    }
+
+    /* Clean background — no texture */
+
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 99px; }
+
+    /* ═══════════════════════════════════════════════════════
+       SIDEBAR OVERLAY (mobile backdrop)
+    ═══════════════════════════════════════════════════════ */
+    #sidebar-overlay {
+        display: none;
+        position: fixed; inset: 0;
+        background: rgba(0,0,0,0.65);
+        backdrop-filter: blur(4px);
+        z-index: 49;
+        animation: fadeIn 0.2s ease;
+    }
+    #sidebar-overlay.active { display: block; }
+
+    /* ═══════════════════════════════════════════════════════
+       SIDEBAR
+    ═══════════════════════════════════════════════════════ */
+    aside {
+        width: var(--sidebar-w);
+        min-width: var(--sidebar-w);
+        background: var(--bg-surface);
+        border-right: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        padding: 0;
+        z-index: 50;
+        position: relative;
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        flex-shrink: 0;
+    }
+
+    .sidebar-header {
+        padding: 1.25rem 1.5rem;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+    }
+
+    .logo {
+        font-family: var(--font-display);
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        letter-spacing: -0.02em;
+    }
+
+    .logo-icon {
+        width: 32px; height: 32px;
+        background: var(--accent-dim);
+        border: 1px solid rgba(141,228,173,0.25);
+        border-radius: 8px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.85rem;
+        color: var(--accent);
+        flex-shrink: 0;
+    }
+
+    #sidebar-close {
+        display: none;
+        background: none; border: none;
+        color: var(--text-muted); cursor: pointer;
+        font-size: 1.1rem; padding: 4px;
+        transition: var(--transition);
+    }
+    #sidebar-close:hover { color: var(--text-primary); }
+
+    .sidebar-body {
+        flex: 1;
+        overflow-y: auto;
+        padding: 1.25rem 1.25rem 0.75rem;
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    /* Google user card */
+    #google-user-card {
+        display: none;
+        background: var(--google-blue-dim);
+        border: 1px solid rgba(66,133,244,0.2);
+        border-radius: var(--radius);
+        padding: 0.75rem;
+        animation: slideInLeft 0.3s ease;
+    }
+
+    #google-user-card.visible { display: flex; align-items: center; gap: 10px; }
+
+    .g-avatar {
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        background: var(--google-blue-dim);
+        border: 2px solid rgba(66,133,244,0.3);
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+
+    .g-avatar-placeholder {
+        width: 34px; height: 34px;
+        border-radius: 50%;
+        background: var(--google-blue-dim);
+        border: 2px solid rgba(66,133,244,0.3);
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.8rem; color: var(--google-blue);
+        flex-shrink: 0;
+    }
+
+    .g-user-info { flex: 1; min-width: 0; }
+    .g-user-name { font-size: 0.8rem; font-weight: 600; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .g-user-sub  { font-size: 0.7rem; color: var(--google-blue); }
+
+    #g-signout-btn {
+        background: none; border: none; cursor: pointer;
+        color: var(--text-muted); font-size: 0.75rem;
+        padding: 2px 6px; border-radius: 4px;
+        transition: var(--transition);
+    }
+    #g-signout-btn:hover { color: var(--red); background: rgba(239,68,68,0.08); }
+
+    /* Sign-in prompt in sidebar */
+    #sidebar-signin-prompt {
+        background: var(--accent-dim);
+        border: 1px solid rgba(141,228,173,0.15);
+        border-radius: var(--radius);
+        padding: 0.875rem;
+        text-align: center;
+    }
+
+    #sidebar-signin-prompt p {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        margin-bottom: 0.6rem;
+        line-height: 1.4;
+    }
+
+    #sidebar-signin-prompt p strong { color: var(--accent); }
+
+    .btn-signin-small {
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+        width: 100%;
+        background: var(--google-blue);
+        color: white;
+        border: none;
+        border-radius: 8px;
+        padding: 7px 12px;
+        font-size: 0.78rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+        font-family: var(--font-ui);
+    }
+    .btn-signin-small:hover { background: #3367d6; transform: translateY(-1px); }
+
+    /* Summary card */
+    .section-label {
+        font-size: 0.65rem;
+        font-family: var(--font-mono);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: var(--text-muted);
+        margin-bottom: 0.6rem;
+        display: flex; align-items: center; gap: 6px;
+    }
+
+    .section-label::after {
+        content: ''; flex: 1;
+        height: 1px; background: var(--border);
+    }
+
+    .live-dot {
+        width: 6px; height: 6px;
+        background: var(--accent);
+        border-radius: 50%;
+        animation: pulse-dot 2s ease-in-out infinite;
+        flex-shrink: 0;
+    }
+
+    @keyframes pulse-dot {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.5; transform: scale(0.8); }
+    }
+
+    #summary-content {
+        max-height: 220px;
+        overflow-y: auto;
+        font-size: 0.82rem;
+    }
+
+    .summary-item {
+        padding: 8px 10px;
+        border-radius: 8px;
+        border: 1px solid var(--border);
+        background: var(--bg-raised);
+        margin-bottom: 6px;
+        transition: var(--transition);
+        animation: fadeIn 0.3s ease both;
+    }
+
+    .summary-item:hover { border-color: var(--border-strong); }
+
+    .summary-country {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--accent);
+        margin-bottom: 2px;
+    }
+
+    .summary-crops {
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+        line-height: 1.4;
+    }
+
+    /* Abbreviation box */
+    .abbr-box {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0.75rem;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        line-height: 1.7;
+    }
+
+    .abbr-box .abbr-row { display: flex; gap: 6px; }
+    .abbr-box .abbr-key { color: var(--accent); font-weight: 600; font-family: var(--font-mono); font-size: 0.7rem; min-width: 38px; }
+
+    /* Refresh button */
+    .sidebar-footer {
+        padding: 0.75rem 1.25rem 1rem;
+        border-top: 1px solid var(--border);
+        margin-top: auto;
+    }
+
+    .btn-refresh {
+        width: 100%;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        border-radius: var(--radius);
+        padding: 9px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+        transition: var(--transition);
+        font-family: var(--font-ui);
+    }
+
+    .btn-refresh:hover {
+        border-color: var(--accent);
+        color: var(--accent);
+        background: var(--accent-dim);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       MAIN CONTENT
+    ═══════════════════════════════════════════════════════ */
+    main {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        flex-direction: column;
+        background: var(--bg-void);
+        position: relative;
+        z-index: 1;
+    }
+
+    /* ─── Header ─── */
+    header {
+        height: var(--header-h);
+        padding: 0 1.5rem;
+        border-bottom: 1px solid var(--border);
+        background: var(--bg-surface);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-shrink: 0;
+        position: relative;
+        z-index: 20;
+    }
+
+    .header-left {
+        display: flex; align-items: center; gap: 10px;
+    }
+
+    #hamburger {
+        display: none;
+        background: none; border: none;
+        color: var(--text-secondary); cursor: pointer;
+        font-size: 1.1rem; padding: 6px;
+        border-radius: 6px;
+        transition: var(--transition);
+    }
+    #hamburger:hover { color: var(--text-primary); background: var(--bg-raised); }
+
+    .header-title {
+        font-family: var(--font-display);
+        font-size: 0.9rem;
+        font-weight: 700;
+        letter-spacing: -0.01em;
+        color: var(--text-primary);
+    }
+
+    #db-status {
+        font-size: 0.72rem;
+        font-family: var(--font-mono);
+        color: var(--accent);
+        background: var(--accent-dim);
+        border: 1px solid rgba(141,228,173,0.2);
+        border-radius: 99px;
+        padding: 2px 10px;
+        display: flex; align-items: center; gap: 5px;
+    }
+
+    .header-actions {
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    .action-btn {
+        display: flex; align-items: center; gap: 6px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--transition);
+        font-family: var(--font-ui);
+        white-space: nowrap;
+    }
+
+    .action-btn:hover {
+        border-color: var(--border-strong);
+        color: var(--text-primary);
+    }
+
+    .action-btn.calendar-btn {
+        display: none;
+        border-color: rgba(66,133,244,0.25);
+        color: var(--google-blue);
+    }
+
+    .action-btn.calendar-btn:hover {
+        background: var(--google-blue-dim);
+        border-color: rgba(66,133,244,0.4);
+    }
+
+    .action-btn.calendar-btn.visible { display: flex; }
+
+    .action-btn.map-btn.active {
+        border-color: rgba(141,228,173,0.3);
+        color: var(--accent);
+        background: var(--accent-dim);
+    }
+
+    .header-avatar {
+        width: 32px; height: 32px;
+        border-radius: 50%;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: center;
+        color: var(--text-muted);
+        cursor: pointer;
+        overflow: hidden;
+        transition: var(--transition);
+    }
+
+    .header-avatar img { width: 100%; height: 100%; object-fit: cover; }
+    .header-avatar:hover { border-color: var(--border-strong); }
+
+    /* ─── Chat Window ─── */
+    #chat-window {
+        flex: 1;
+        padding: 1.5rem;
+        overflow-y: auto;
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
+    }
+
+    .message {
+        max-width: 82%;
+        padding: 0.875rem 1.125rem;
+        border-radius: var(--radius-lg);
+        line-height: 1.6;
+        font-size: 0.9rem;
+        animation: msgIn 0.25s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+    }
+
+    @keyframes msgIn {
+        from { opacity: 0; transform: translateY(10px) scale(0.97); }
+        to   { opacity: 1; transform: translateY(0)    scale(1); }
+    }
+
+    .user-message {
+        align-self: flex-end;
+        background: #166534;
+        color: #fff;
+        border-bottom-right-radius: 4px;
+    }
+
+    .bot-message {
+        align-self: flex-start;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        color: var(--text-primary);
+        border-bottom-left-radius: 4px;
+    }
+
+    /* Tables inside bot messages */
+    .bot-message table {
+        width: 100%;
+        border-collapse: collapse;
+        margin: 0.875rem 0;
+        background: var(--bg-raised);
+        border-radius: 10px;
+        overflow: hidden;
+        border: 1px solid var(--border);
+        font-size: 0.83rem;
+    }
+
+    .bot-message th {
+        background: var(--bg-raised);
+        color: var(--accent);
+        padding: 9px 12px;
+        text-align: left;
+        font-family: var(--font-mono);
+        font-size: 0.7rem;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        border-bottom: 1px solid var(--border-strong);
+    }
+
+    .bot-message td {
+        padding: 8px 12px;
+        border-bottom: 1px solid var(--border);
+        color: var(--text-secondary);
+    }
+
+    .bot-message tr:last-child td { border-bottom: none; }
+    .bot-message tr:hover td { background: rgba(255,255,255,0.02); }
+
+    .bot-message strong { color: var(--text-primary); }
+    .bot-message code {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 1px 5px;
+        font-family: var(--font-mono);
+        font-size: 0.82em;
+        color: var(--accent);
+    }
+
+    .bot-message ul, .bot-message ol {
+        padding-left: 1.25rem;
+        margin: 0.4rem 0;
+    }
+
+    .bot-message li { margin-bottom: 3px; }
+
+    .bot-message h3 {
+        font-family: var(--font-display);
+        font-size: 1rem;
+        color: var(--text-primary);
+        margin-bottom: 0.5rem;
+    }
+
+    /* ─── Input Area ─── */
+    .prompt-container {
+        padding: 0.875rem 1.5rem 1.25rem;
+        background: var(--bg-surface);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+
+    .typing-indicator {
+        font-size: 0.78rem;
+        color: var(--accent);
+        margin-bottom: 8px;
+        display: none;
+        align-items: center;
+        gap: 7px;
+        font-family: var(--font-mono);
+    }
+
+    /* Live status — appears in chat flow after user message */
+    .live-status {
+        align-self: flex-start;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 14px;
+        font-size: 0.78rem;
+        font-family: var(--font-mono);
+        color: var(--accent);
+        background: var(--accent-dim);
+        border: 1px solid rgba(141,228,173,0.1);
+        border-radius: 20px;
+        animation: statusFadeIn 0.2s ease both;
+        max-width: 80%;
+    }
+    .live-status .status-dot {
+        width: 6px; height: 6px;
+        background: var(--accent);
+        border-radius: 50%;
+        flex-shrink: 0;
+        animation: statusBlink 1.2s ease-in-out infinite;
+    }
+    @keyframes statusBlink {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.3; }
+    }
+    @keyframes statusFadeIn {
+        from { opacity: 0; transform: translateY(4px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+
+    .typing-indicator .dot-row { display: flex; gap: 3px; }
+
+    .typing-indicator .dot {
+        width: 5px; height: 5px;
+        background: var(--accent);
+        border-radius: 50%;
+        animation: typingDot 1.4s ease-in-out infinite;
+    }
+
+    .typing-indicator .dot:nth-child(2) { animation-delay: 0.2s; }
+    .typing-indicator .dot:nth-child(3) { animation-delay: 0.4s; }
+
+    @keyframes typingDot {
+        0%, 60%, 100% { transform: translateY(0); opacity: 0.4; }
+        30% { transform: translateY(-5px); opacity: 1; }
+    }
+
+    .input-wrapper {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+    }
+
+    #user-input {
+        flex: 1;
+        padding: 12px 16px;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        outline: none;
+        font-size: 0.9rem;
+        font-family: var(--font-ui);
+        transition: var(--transition);
+        min-width: 0;
+    }
+
+    #user-input::placeholder { color: var(--text-muted); }
+
+    #user-input:focus {
+        border-color: rgba(141,228,173,0.4);
+        background: var(--bg-raised);
+        box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+
+    .send-btn {
+        width: 44px; height: 44px;
+        background: var(--accent);
+        border: none;
+        border-radius: var(--radius);
+        color: white;
+        cursor: pointer;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 0.9rem;
+        transition: var(--transition);
+        flex-shrink: 0;
+    }
+
+    .send-btn:hover {
+        filter: brightness(1.15);
+        transform: translateY(-1px);
+    }
+
+    .send-btn:active { transform: translateY(0); }
+
+    /* ═══════════════════════════════════════════════════════
+       INTEL PANEL (Maps + Calendar)
+    ═══════════════════════════════════════════════════════ */
+    #intel-panel {
+        width: var(--intel-w);
+        min-width: var(--intel-w);
+        background: var(--bg-surface);
+        border-left: 1px solid var(--border);
+        display: flex;
+        flex-direction: column;
+        transform: translateX(100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        position: fixed;
+        right: 0; top: 0; bottom: 0;
+        z-index: 40;
+    }
+
+    #intel-panel.open {
+        transform: translateX(0);
+    }
+
+    .intel-header {
+        height: var(--header-h);
+        padding: 0 1.25rem;
+        border-bottom: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between;
+        flex-shrink: 0;
+    }
+
+    .intel-title {
+        font-family: var(--font-display);
+        font-size: 0.85rem;
+        font-weight: 700;
+        color: var(--text-primary);
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    .intel-close {
+        background: none; border: none;
+        color: var(--text-muted); cursor: pointer;
+        font-size: 1rem; padding: 4px;
+        border-radius: 5px; transition: var(--transition);
+    }
+    .intel-close:hover { color: var(--text-primary); background: var(--bg-raised); }
+
+    .intel-tabs {
+        display: flex;
+        border-bottom: 1px solid var(--border);
+        padding: 0 1rem;
+        gap: 4px;
+        flex-shrink: 0;
+    }
+
+    .intel-tab {
+        background: none; border: none;
+        color: var(--text-muted); cursor: pointer;
+        font-size: 0.8rem; font-weight: 500;
+        padding: 10px 12px;
+        border-bottom: 2px solid transparent;
+        transition: var(--transition);
+        font-family: var(--font-ui);
+        display: flex; align-items: center; gap: 5px;
+        margin-bottom: -1px;
+    }
+
+    .intel-tab.active {
+        color: var(--accent);
+        border-bottom-color: var(--accent);
+    }
+
+    .intel-tab:hover:not(.active) { color: var(--text-secondary); }
+
+    .intel-pane {
+        flex: 1;
+        display: none;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .intel-pane.active { display: flex; }
+
+    #google-map {
+        flex: 1;
+        background: var(--bg-raised);
+    }
+
+    .map-placeholder {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+        text-align: center;
+        padding: 2rem;
+    }
+
+    .map-placeholder i { font-size: 2rem; opacity: 0.3; }
+    .map-placeholder code {
+        font-family: var(--font-mono);
+        font-size: 0.72rem;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        padding: 3px 8px; border-radius: 4px;
+        color: var(--accent);
+    }
+
+    /* Calendar events pane */
+    .calendar-pane-body {
+        flex: 1; overflow-y: auto;
+        padding: 1rem;
+    }
+
+    .cal-event-card {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0.875rem;
+        margin-bottom: 8px;
+        transition: var(--transition);
+        animation: fadeIn 0.3s ease both;
+    }
+
+    .cal-event-card:hover { border-color: var(--border-strong); }
+
+    .cal-event-title {
+        font-size: 0.83rem; font-weight: 600;
+        color: var(--text-primary); margin-bottom: 4px;
+    }
+
+    .cal-event-time {
+        font-size: 0.74rem; font-family: var(--font-mono);
+        color: var(--google-blue);
+    }
+
+    .cal-event-empty {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-muted);
+        font-size: 0.82rem;
+    }
+
+    .cal-event-empty i { font-size: 1.8rem; opacity: 0.2; display: block; margin-bottom: 10px; }
+
+    .btn-create-event {
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+        width: calc(100% - 2rem);
+        margin: 0.75rem 1rem;
+        background: var(--google-blue);
+        color: white; border: none;
+        border-radius: var(--radius); padding: 10px;
+        font-size: 0.83rem; font-weight: 600;
+        cursor: pointer; transition: var(--transition);
+        font-family: var(--font-ui);
+        flex-shrink: 0;
+    }
+    .btn-create-event:hover { background: #3367d6; transform: translateY(-1px); }
+
+    /* ═══════════════════════════════════════════════════════
+       AUTH MODAL
+    ═══════════════════════════════════════════════════════ */
+    #auth-modal {
+        position: fixed; inset: 0;
+        background: rgba(4, 7, 16, 0.85);
+        backdrop-filter: blur(16px);
+        z-index: 100;
+        display: flex; align-items: center; justify-content: center;
+        padding: 1rem;
+        animation: backdropIn 0.3s ease;
+    }
+
+    @keyframes backdropIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+
+    #auth-modal.hidden {
+        animation: backdropOut 0.25s ease forwards;
+        pointer-events: none;
+    }
+
+    @keyframes backdropOut {
+        to { opacity: 0; }
+    }
+
+    .auth-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-strong);
+        border-radius: 20px;
+        padding: 2.5rem 2rem 2rem;
+        max-width: 380px;
+        width: 100%;
+        box-shadow: var(--shadow-modal);
+        text-align: center;
+        animation: cardIn 0.35s cubic-bezier(0.34, 1.4, 0.64, 1) both;
+        animation-delay: 0.1s;
+        position: relative;
+    }
+
+    @keyframes cardIn {
+        from { opacity: 0; transform: scale(0.9) translateY(20px); }
+        to   { opacity: 1; transform: scale(1)   translateY(0); }
+    }
+
+    .auth-logo {
+        font-family: var(--font-display);
+        font-size: 1.5rem; font-weight: 800;
+        color: var(--accent);
+        margin-bottom: 0.25rem;
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+    }
+
+    .auth-logo-icon {
+        width: 40px; height: 40px;
+        background: var(--accent-dim);
+        border: 1px solid rgba(141,228,173,0.3);
+        border-radius: 10px;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 1rem; color: var(--accent);
+    }
+
+    .auth-subtitle {
+        font-size: 0.82rem;
+        color: var(--text-muted);
+        margin-bottom: 1.75rem;
+        font-family: var(--font-mono);
+        letter-spacing: 0.04em;
+    }
+
+    .auth-feature-list {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 1rem;
+        margin-bottom: 1.75rem;
+        text-align: left;
+    }
+
+    .auth-feature {
+        display: flex; align-items: flex-start; gap: 10px;
+        font-size: 0.82rem; color: var(--text-secondary);
+        padding: 5px 0;
+    }
+
+    .auth-feature i {
+        color: var(--accent); width: 14px;
+        margin-top: 1px; flex-shrink: 0;
+        font-size: 0.75rem;
+    }
+
+    .auth-feature.google i { color: var(--google-blue); }
+
+    .btn-google-signin {
+        display: flex; align-items: center; justify-content: center; gap: 10px;
+        width: 100%;
+        background: #fff;
+        color: #3c4043;
+        border: 1px solid #dadce0;
+        border-radius: 10px;
+        padding: 11px 16px;
+        font-size: 0.88rem;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+        font-family: var(--font-ui);
+        margin-bottom: 10px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    .btn-google-signin:hover {
+        background: #f8f9fa;
+        box-shadow: 0 4px 14px rgba(0,0,0,0.2);
+        transform: translateY(-1px);
+    }
+
+    .google-g {
+        width: 20px; height: 20px;
+        background: url('https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg') center/contain no-repeat;
+        flex-shrink: 0;
+    }
+
+    .btn-skip {
+        background: var(--bg-raised);
+        border: 1px solid var(--border-strong);
+        color: var(--text-secondary);
+        width: 100%;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 0.82rem;
+        cursor: pointer;
+        transition: var(--transition);
+        font-family: var(--font-ui);
+    }
+
+    .btn-skip:hover { border-color: var(--accent); color: var(--text-primary); background: var(--accent-dim); }
+
+    .auth-disclaimer {
+        font-size: 0.72rem;
+        color: var(--text-secondary);
+        margin-top: 1rem;
+        line-height: 1.5;
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       SCHEDULE MODAL
+    ═══════════════════════════════════════════════════════ */
+    #schedule-modal {
+        position: fixed; inset: 0;
+        background: rgba(4, 7, 16, 0.8);
+        backdrop-filter: blur(12px);
+        z-index: 90;
+        display: none; align-items: center; justify-content: center;
+        padding: 1rem;
+    }
+
+    #schedule-modal.open { display: flex; }
+
+    .schedule-card {
+        background: var(--bg-surface);
+        border: 1px solid var(--border-strong);
+        border-radius: 18px;
+        width: 100%;
+        max-width: 460px;
+        max-height: 90dvh;
+        overflow-y: auto;
+        box-shadow: var(--shadow-modal);
+        animation: cardIn 0.3s cubic-bezier(0.34, 1.3, 0.64, 1);
+    }
+
+    .schedule-header {
+        padding: 1.5rem 1.5rem 1rem;
+        border-bottom: 1px solid var(--border);
+        display: flex; align-items: center; justify-content: space-between;
+    }
+
+    .schedule-title {
+        font-family: var(--font-display);
+        font-size: 1rem; font-weight: 700;
+        color: var(--text-primary);
+        display: flex; align-items: center; gap: 8px;
+    }
+
+    .schedule-title i { color: var(--google-blue); }
+
+    .modal-close {
+        background: none; border: none;
+        color: var(--text-muted); cursor: pointer;
+        font-size: 1rem; padding: 4px;
+        border-radius: 5px; transition: var(--transition);
+    }
+    .modal-close:hover { color: var(--text-primary); background: var(--bg-raised); }
+
+    .schedule-body { padding: 1.25rem 1.5rem 1.5rem; }
+
+    .form-group { margin-bottom: 1rem; }
+
+    .form-label {
+        display: block;
+        font-size: 0.75rem; font-weight: 600;
+        color: var(--text-secondary);
+        margin-bottom: 5px;
+        text-transform: uppercase; letter-spacing: 0.05em;
+        font-family: var(--font-mono);
+    }
+
+    .form-input, .form-select, .form-textarea {
+        width: 100%;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        color: var(--text-primary);
+        padding: 10px 13px;
+        font-size: 0.88rem;
+        font-family: var(--font-ui);
+        outline: none;
+        transition: var(--transition);
+    }
+
+    .form-input:focus, .form-select:focus, .form-textarea:focus {
+        border-color: rgba(66,133,244,0.4);
+        box-shadow: 0 0 0 3px var(--google-blue-dim);
+    }
+
+    .form-select { appearance: none; cursor: pointer; }
+
+    .form-textarea {
+        resize: vertical;
+        min-height: 80px;
+    }
+
+    .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .form-check {
+        display: flex; align-items: center; gap: 8px;
+        font-size: 0.85rem; color: var(--text-secondary);
+        cursor: pointer;
+    }
+
+    .form-check input[type="checkbox"] {
+        width: 16px; height: 16px; cursor: pointer;
+        accent-color: var(--google-blue);
+    }
+
+    .schedule-footer {
+        display: flex; gap: 10px;
+        margin-top: 1.25rem;
+        padding-top: 1rem;
+        border-top: 1px solid var(--border);
+    }
+
+    .btn-cancel {
+        flex: 1;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        border-radius: var(--radius); padding: 10px;
+        font-size: 0.85rem; font-weight: 500;
+        cursor: pointer; transition: var(--transition);
+        font-family: var(--font-ui);
+    }
+
+    .btn-cancel:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+    .btn-create {
+        flex: 2;
+        background: var(--google-blue);
+        border: none; color: white;
+        border-radius: var(--radius); padding: 10px;
+        font-size: 0.85rem; font-weight: 600;
+        cursor: pointer; transition: var(--transition);
+        font-family: var(--font-ui);
+        display: flex; align-items: center; justify-content: center; gap: 7px;
+    }
+
+    .btn-create:hover { background: #3367d6; transform: translateY(-1px); }
+    .btn-create:disabled { opacity: 0.5; pointer-events: none; }
+
+    /* Toast */
+    #toast {
+        position: fixed;
+        bottom: 5rem; left: 50%;
+        transform: translateX(-50%) translateY(20px);
+        background: var(--bg-raised);
+        border: 1px solid var(--border-strong);
+        color: var(--text-primary);
+        border-radius: 10px;
+        padding: 10px 18px;
+        font-size: 0.83rem;
+        box-shadow: var(--shadow-card);
+        opacity: 0;
+        transition: all 0.3s ease;
+        z-index: 200;
+        white-space: nowrap;
+        pointer-events: none;
+    }
+
+    #toast.show {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+
+    #toast.success { border-color: rgba(141,228,173,0.3); color: var(--accent); }
+    #toast.error   { border-color: rgba(239,68,68,0.3);  color: var(--red); }
+
+    /* ═══════════════════════════════════════════════════════
+       ANIMATIONS
+    ═══════════════════════════════════════════════════════ */
+    @keyframes fadeIn {
+        from { opacity: 0; } to { opacity: 1; }
+    }
+
+    @keyframes slideInLeft {
+        from { opacity: 0; transform: translateX(-12px); }
+        to   { opacity: 1; transform: translateX(0); }
+    }
+
+    /* Staggered sidebar sections */
+    .sidebar-body > * {
+        animation: slideInLeft 0.35s ease both;
+    }
+    .sidebar-body > *:nth-child(1) { animation-delay: 0.05s; }
+    .sidebar-body > *:nth-child(2) { animation-delay: 0.1s; }
+    .sidebar-body > *:nth-child(3) { animation-delay: 0.15s; }
+    .sidebar-body > *:nth-child(4) { animation-delay: 0.2s; }
+    .sidebar-body > *:nth-child(5) { animation-delay: 0.25s; }
+
+    /* ═══════════════════════════════════════════════════════
+       RESPONSIVE — TABLET (768–1023px)
+    ═══════════════════════════════════════════════════════ */
+    @media (max-width: 1023px) {
+        :root { --sidebar-w: 250px; --intel-w: 300px; }
+
+        aside {
+            position: fixed;
+            left: 0; top: 0; bottom: 0;
+            transform: translateX(-100%);
+            box-shadow: 4px 0 30px rgba(0,0,0,0.5);
+        }
+
+        aside.open { transform: translateX(0); }
+
+        #hamburger { display: flex; }
+        #sidebar-close { display: block; }
+
+        .action-btn span { display: none; }
+        .action-btn { padding: 6px 10px; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESPONSIVE — MOBILE (< 640px)
+    ═══════════════════════════════════════════════════════ */
+    @media (max-width: 639px) {
+        :root { --header-h: 54px; }
+
+        body { font-size: 14px; }
+
+        #chat-window { padding: 1rem; gap: 1rem; }
+
+        .message { max-width: 92%; font-size: 0.875rem; }
+
+        .prompt-container { padding: 0.75rem 1rem 0.875rem; }
+
+        #user-input { font-size: 0.875rem; padding: 11px 13px; }
+
+        .bot-message table { font-size: 0.75rem; display: block; overflow-x: auto; }
+        .bot-message th, .bot-message td { padding: 7px 9px; white-space: nowrap; }
+
+        .header-title { font-size: 0.85rem; }
+        #db-status { font-size: 0.68rem; padding: 2px 7px; }
+
+        .auth-card { padding: 2rem 1.5rem 1.5rem; }
+
+        .form-row { grid-template-columns: 1fr; }
+
+        #intel-panel {
+            width: 100%;
+            min-width: 0;
+        }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       RESPONSIVE — LARGE DESKTOP (1400px+)
+    ═══════════════════════════════════════════════════════ */
+    @media (min-width: 1400px) {
+        :root { --sidebar-w: 290px; --intel-w: 360px; }
+
+        aside {
+            position: relative;
+            transform: none !important;
+        }
+
+        #intel-panel {
+            position: relative;
+            transform: translateX(0);
+            display: none;
+        }
+
+        #intel-panel.open {
+            display: flex;
+        }
+
+        #hamburger { display: none !important; }
+        #sidebar-close { display: none !important; }
+        #sidebar-overlay { display: none !important; }
+    }
+
+    @media (min-width: 1024px) and (max-width: 1399px) {
+        aside {
+            position: relative;
+            transform: none !important;
+        }
+        #hamburger { display: none !important; }
+        #sidebar-close { display: none !important; }
+        #sidebar-overlay { display: none !important; }
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       GOOGLE MAPS EMBED (MCP injected iframes)
+    ═══════════════════════════════════════════════════════ */
+    .maps-embed-wrapper {
+        margin: 0.75rem 0;
+        border-radius: var(--radius);
+        overflow: hidden;
+        border: 1px solid var(--border-strong);
+        background: var(--bg-raised);
+    }
+
+    .maps-embed-wrapper iframe {
+        display: block;
+        border: none;
+        border-radius: 0;
+    }
+
+    .maps-embed-caption {
+        padding: 6px 12px;
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        font-family: var(--font-mono);
+        border-top: 1px solid var(--border);
+        background: var(--bg-surface);
+    }
+
+    /* ═══════════════════════════════════════════════════════
+       GOOGLE TASKS PANEL (intel tab)
+    ═══════════════════════════════════════════════════════ */
+    .gtask-card {
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 0.75rem 1rem;
+        margin-bottom: 7px;
+        transition: var(--transition);
+        animation: fadeIn 0.25s ease both;
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .gtask-card:hover { border-color: var(--border-strong); }
+
+    .gtask-check {
+        width: 16px; height: 16px;
+        border: 1.5px solid var(--border-strong);
+        border-radius: 50%;
+        flex-shrink: 0;
+        margin-top: 2px;
+    }
+
+    .gtask-body { flex: 1; min-width: 0; }
+    .gtask-title { font-size: 0.83rem; font-weight: 500; color: var(--text-primary); margin-bottom: 2px; }
+    .gtask-notes { font-size: 0.74rem; color: var(--text-secondary); line-height: 1.4; }
+    .gtask-due {
+        font-size: 0.7rem;
+        font-family: var(--font-mono);
+        color: var(--accent);
+        margin-top: 4px;
+    }
+
+    .gtask-del-btn {
+        background: none; border: none;
+        color: var(--text-muted); cursor: pointer;
+        font-size: 0.75rem; padding: 2px 5px;
+        border-radius: 4px; transition: var(--transition);
+        flex-shrink: 0;
+    }
+    .gtask-del-btn:hover { color: var(--red); background: rgba(248,113,113,0.08); }
+
+    .tasks-pane-header {
+        padding: 0.75rem 1rem;
+        display: flex; align-items: center; justify-content: space-between;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+
+    .tasks-pane-header span {
+        font-size: 0.72rem;
+        font-family: var(--font-mono);
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+    }
+
+    .btn-add-gtask {
+        display: flex; align-items: center; gap: 5px;
+        background: var(--accent-dim);
+        border: 1px solid rgba(52,211,153,0.2);
+        color: var(--accent);
+        border-radius: 6px;
+        padding: 5px 10px;
+        font-size: 0.75rem; font-weight: 600;
+        cursor: pointer; transition: var(--transition);
+        font-family: var(--font-ui);
+    }
+    .btn-add-gtask:hover { background: var(--accent-glow); }
+
+    .tasks-pane-body {
+        flex: 1; overflow-y: auto;
+        padding: 0.875rem;
+    }
+
+    /* Inline add-task form */
+    #gtask-inline-form {
+        display: none;
+        background: var(--bg-raised);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        padding: 0.875rem;
+        margin-bottom: 10px;
+        animation: fadeIn 0.2s ease;
+    }
+
+    #gtask-inline-form.visible { display: block; }
+
+    #note-inline-form {
+        display: none;
+        background: var(--bg-raised);
+        border: 1px solid var(--border-strong);
+        border-radius: var(--radius);
+        padding: 0.875rem;
+        margin-bottom: 10px;
+        animation: fadeIn 0.2s ease;
+    }
+    #note-inline-form.visible { display: block; }
+    #note-inline-form input,
+    #note-inline-form textarea {
+        width: 100%;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        color: var(--text-primary);
+        padding: 8px 11px;
+        font-size: 0.83rem;
+        font-family: var(--font-ui);
+        outline: none;
+        transition: var(--transition);
+        margin-bottom: 7px;
+    }
+    #note-inline-form input:focus,
+    #note-inline-form textarea:focus {
+        border-color: rgba(52,211,153,0.35);
+        box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+    #note-inline-form textarea { resize: none; height: 70px; }
+
+    #gtask-inline-form input,
+    #gtask-inline-form textarea {
+        width: 100%;
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        color: var(--text-primary);
+        padding: 8px 11px;
+        font-size: 0.83rem;
+        font-family: var(--font-ui);
+        outline: none;
+        transition: var(--transition);
+        margin-bottom: 7px;
+    }
+
+    #gtask-inline-form input:focus,
+    #gtask-inline-form textarea:focus {
+        border-color: rgba(52,211,153,0.35);
+        box-shadow: 0 0 0 2px var(--accent-dim);
+    }
+
+    #gtask-inline-form textarea { resize: none; height: 56px; }
+
+    .gtask-form-row {
+        display: flex; gap: 7px;
+    }
+
+    .btn-gtask-save {
+        flex: 1;
+        background: var(--accent-dim);
+        border: 1px solid rgba(52,211,153,0.25);
+        color: var(--accent);
+        border-radius: 7px; padding: 7px;
+        font-size: 0.8rem; font-weight: 600;
+        cursor: pointer; transition: var(--transition);
+        font-family: var(--font-ui);
+    }
+    .btn-gtask-save:hover { background: var(--accent-glow); }
+
+    .btn-gtask-cancel {
+        background: var(--bg-surface);
+        border: 1px solid var(--border);
+        color: var(--text-muted);
+        border-radius: 7px; padding: 7px 12px;
+        font-size: 0.8rem; cursor: pointer;
+        transition: var(--transition); font-family: var(--font-ui);
+    }
+    .btn-gtask-cancel:hover { color: var(--text-primary); }
+
+    /* ═══════════════════════════════════════════════════════
+       SUBTLE UI ADJUSTMENTS
+    ═══════════════════════════════════════════════════════ */
+
+    /* Remove the grid texture — too decorative for a project */
+    body::before { display: none; }
+
+    /* Header panel-tab buttons — Maps, Calendar, Tasks */
+    .panel-tab-btn {
+        display: flex; align-items: center; gap: 6px;
+        background: var(--bg-raised);
+        border: 1px solid var(--border);
+        color: var(--text-secondary);
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 0.8rem;
+        font-weight: 500;
+        cursor: pointer;
+        transition: var(--transition);
+        font-family: var(--font-ui);
+        white-space: nowrap;
+    }
+
+    .panel-tab-btn:hover {
+        border-color: var(--border-strong);
+        color: var(--text-primary);
+    }
+
+    .panel-tab-btn.active {
+        background: var(--accent-dim);
+        border-color: rgba(141,228,173,0.3);
+        color: var(--accent);
+    }
+
+    .panel-tab-btn.cal-active {
+        background: var(--google-blue-dim);
+        border-color: rgba(66,133,244,0.3);
+        color: var(--google-blue);
+    }
+
+    /* Hide on mobile (spans only) */
+    @media (max-width: 1023px) {
+        .panel-tab-btn span { display: none; }
+        .panel-tab-btn { padding: 6px 10px; }
+    }
+
+    /* Light mode — auto OS theme (unchanged tokens, just re-mapped) */
+    @media (prefers-color-scheme: light) {
+        header, .prompt-container {
+            background: var(--bg-surface);
+        }
+        #auth-modal {
+            background: rgba(180, 190, 200, 0.55);
+        }
+    }
+    </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════
+     GOOGLE SIGN-IN MODAL
+═══════════════════════════════════════════════════════ -->
+<div id="auth-modal">
+    <div class="auth-card">
+        <div class="auth-logo">
+            <div class="auth-logo-icon"><i class="fas fa-leaf"></i></div>
+            AgroSync
+        </div>
+        <div class="auth-subtitle">APAC AGRO INTELLIGENCE PLATFORM</div>
+
+        <div class="auth-feature-list">
+            <div class="auth-feature">
+                <i class="fas fa-database"></i>
+                <span>Query live tables — farmers, inventory, tasks</span>
+            </div>
+            <div class="auth-feature google">
+                <i class="fab fa-google"></i>
+                <span>Schedule farmer meetings via Google Calendar</span>
+            </div>
+            <div class="auth-feature google">
+                <i class="fas fa-map-marked-alt"></i>
+                <span>View APAC farmer locations on Google Maps</span>
+            </div>
+            <div class="auth-feature">
+                <i class="fas fa-chart-bar"></i>
+                <span>Stock, crop and task analytics across regions</span>
+            </div>
+        </div>
+
+        <button class="btn-google-signin" onclick="signInWithGoogle()">
+            <div class="google-g"></div>
+            Sign in with Google
+        </button>
+
+        <button class="btn-skip" onclick="skipAuth()">
+            Continue without Google Calendar
+        </button>
+
+        <p class="auth-disclaimer">
+            Signing in enables Google Calendar, Tasks and Maps features.<br>
+            Your credentials are never stored on our servers.
+        </p>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SCHEDULE MEETING MODAL
+═══════════════════════════════════════════════════════ -->
+<div id="schedule-modal">
+    <div class="schedule-card">
+        <div class="schedule-header">
+            <div class="schedule-title">
+                <i class="fas fa-calendar-plus"></i> Schedule Farmer Meeting
+            </div>
+            <button class="modal-close" onclick="closeScheduleModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="schedule-body">
+            <div class="form-group">
+                <label class="form-label">Meeting Title</label>
+                <input type="text" class="form-input" id="evt-title" value="AgroSync: Farmer Meeting" placeholder="Meeting title">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Farmer Name</label>
+                <input type="text" class="form-input" id="evt-farmer" placeholder="e.g. Amit Patel">
+            </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Date</label>
+                    <input type="date" class="form-input" id="evt-date">
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Start Time</label>
+                    <input type="time" class="form-input" id="evt-time" value="10:00">
+                </div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Duration</label>
+                <select class="form-select form-input" id="evt-duration">
+                    <option value="30">30 minutes</option>
+                    <option value="60" selected>1 hour</option>
+                    <option value="90">1.5 hours</option>
+                    <option value="120">2 hours</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea class="form-textarea form-input" id="evt-desc" placeholder="Meeting agenda, crops to discuss, field locations…"></textarea>
+            </div>
+            <label class="form-check">
+                <input type="checkbox" id="evt-meet" checked>
+                Add Google Meet video link
+            </label>
+            <div class="schedule-footer">
+                <button class="btn-cancel" onclick="closeScheduleModal()">Cancel</button>
+                <button class="btn-create" id="create-event-btn" onclick="createCalendarEvent()">
+                    <i class="fas fa-calendar-check"></i> Create Event
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Mobile sidebar overlay -->
+<div id="sidebar-overlay" onclick="closeSidebar()"></div>
+
+<!-- Toast notification -->
+<div id="toast"></div>
+
+<!-- ═══════════════════════════════════════════════════════
+     SIDEBAR
+═══════════════════════════════════════════════════════ -->
+<aside id="sidebar">
+    <div class="sidebar-header">
+        <div class="logo">
+            <div class="logo-icon"><i class="fas fa-leaf"></i></div>
+            AgroSync Hub
+        </div>
+        <button id="sidebar-close" onclick="closeSidebar()"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="sidebar-body">
+
+        <!-- Google user card (visible after auth) -->
+        <div id="google-user-card">
+            <div class="g-avatar-placeholder" id="g-avatar-wrap">
+                <i class="fas fa-user"></i>
+            </div>
+            <div class="g-user-info">
+                <div class="g-user-name" id="g-user-name">—</div>
+                <div class="g-user-sub">Google Calendar Active</div>
+            </div>
+            <button id="g-signout-btn" onclick="signOut()" title="Sign out">
+                <i class="fas fa-sign-out-alt"></i>
+            </button>
+        </div>
+
+        <!-- Sign-in prompt (visible before auth) -->
+        <div id="sidebar-signin-prompt">
+            <p>Sign in to enable <strong>Google Calendar</strong> and schedule farmer meetings directly.</p>
+            <button class="btn-signin-small" onclick="signInWithGoogle()">
+                <div class="google-g" style="width:16px;height:16px;"></div>
+                Sign in with Google
+            </button>
+        </div>
+
+        <!-- Live Insights — EXISTING LOGIC PRESERVED -->
+        <div>
+            <div class="section-label">
+                <div class="live-dot"></div>
+                Live Insights
+            </div>
+            <div id="summary-content" class="summary-list">
+                <div style="color:var(--text-muted);font-size:0.8rem;padding:8px;">Synchronizing AlloyDB…</div>
+            </div>
+        </div>
+        <!-- Sub-Region guide — EXISTING CONTENT PRESERVED -->
+        <div>
+            <div class="section-label">Sub-Region Guide</div>
+            <div class="abbr-box">
+                <div class="abbr-row"><span class="abbr-key">SSWA</span><span>South & South West Asia</span></div>
+                <div class="abbr-row"><span class="abbr-key">SEA</span><span>South East Asia</span></div>
+                <div class="abbr-row"><span class="abbr-key">EAS</span><span>East Asia</span></div>
+                <div class="abbr-row"><span class="abbr-key">PAC</span><span>Pacific Islands</span></div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Refresh button — EXISTING LOGIC PRESERVED -->
+    <div class="sidebar-footer">
+        <button class="btn-refresh" onclick="fetchSummary()">
+            <i class="fas fa-sync-alt"></i> Force Refresh
+        </button>
+    </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════
+     MAIN
+═══════════════════════════════════════════════════════ -->
+<main>
+    <header>
+        <div class="header-left">
+            <button id="hamburger" onclick="openSidebar()"><i class="fas fa-bars"></i></button>
+            <div class="header-title">APAC Coordinator</div>
+            <div id="db-status"><span style="color:var(--accent)">●</span>&nbsp;Online</div>
+        </div>
+        <div class="header-actions">
+            <!-- Panel tab buttons — each opens the intel panel on the correct tab -->
+            <button class="panel-tab-btn" id="hdr-btn-map"      onclick="openPanel('map')">
+                <i class="fas fa-map-marked-alt"></i>
+                <span>Maps</span>
+            </button>
+            <button class="panel-tab-btn" id="hdr-btn-calendar" onclick="openPanel('calendar')">
+                <i class="fas fa-calendar-alt"></i>
+                <span>Calendar</span>
+            </button>
+            <button class="panel-tab-btn" id="hdr-btn-tasks"    onclick="openPanel('tasks')">
+                <i class="fas fa-check-circle"></i>
+                <span>Tasks</span>
+            </button>
+            <button class="panel-tab-btn" id="hdr-btn-notes"    onclick="openPanel('notes')">
+                <i class="fas fa-sticky-note"></i>
+                <span>Notes</span>
+            </button>
+            <!-- User avatar -->
+            <div class="header-avatar" id="header-avatar">
+                <i class="fas fa-user-circle" style="font-size:1.1rem;color:var(--text-muted);"></i>
+            </div>
+        </div>
+    </header>
+
+    <!-- EXISTING: Chat Window -->
+    <div id="chat-window"></div>
+
+    <!-- EXISTING: Input Area -->
+    <div class="prompt-container">
+        <div class="input-wrapper">
+            <input type="text" id="user-input"
+                   placeholder="Ask about farmers, tasks, inventory, analytics…"
+                   onkeypress="handleKey(event)">
+            <button class="send-btn" onclick="sendMessage()">
+                <i class="fas fa-paper-plane"></i>
+            </button>
+        </div>
+    </div>
+</main>
+
+<!-- ═══════════════════════════════════════════════════════
+     INTEL PANEL (Maps + Calendar)
+═══════════════════════════════════════════════════════ -->
+<div id="intel-panel">
+    <div class="intel-header">
+        <div class="intel-title">
+            <i class="fas fa-satellite-dish" style="color:var(--accent);font-size:0.85rem;"></i>
+            APAC Intel
+        </div>
+        <button class="intel-close" onclick="toggleIntelPanel()"><i class="fas fa-times"></i></button>
+    </div>
+
+    <div class="intel-tabs">
+        <button class="intel-tab active" id="tab-map" onclick="switchIntelTab('map')">
+            <i class="fas fa-map"></i> Map
+        </button>
+        <button class="intel-tab" id="tab-calendar" onclick="switchIntelTab('calendar')">
+            <i class="fas fa-calendar-alt"></i> Calendar
+        </button>
+        <button class="intel-tab" id="tab-tasks" onclick="switchIntelTab('tasks')">
+            <i class="fas fa-check-circle"></i> Tasks
+        </button>
+        <button class="intel-tab" id="tab-notes" onclick="switchIntelTab('notes')">
+            <i class="fas fa-sticky-note"></i> Notes
+        </button>
+    </div>
+
+    <!-- Map pane -->
+    <div class="intel-pane active" id="pane-map">
+        <div id="google-map">
+            <div class="map-placeholder" id="map-placeholder">
+                <i class="fas fa-map-marked-alt"></i>
+                <div>Google Maps will appear here</div>
+                <div style="margin-top:4px;">Set the <code>MAPS_API_KEY</code> environment variable on the server to activate</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Calendar pane -->
+    <div class="intel-pane" id="pane-calendar">
+        <button class="btn-create-event" onclick="openScheduleModal()">
+            <i class="fas fa-calendar-plus"></i> Schedule New Meeting
+        </button>
+        <div class="calendar-pane-body" id="cal-events-body">
+            <div class="cal-event-empty">
+                <i class="fas fa-calendar-alt"></i>
+                Sign in with Google to view upcoming meetings
+            </div>
+        </div>
+    </div>
+
+    <!-- Google Tasks pane -->
+    <div class="intel-pane" id="pane-tasks">
+        <div class="tasks-pane-header">
+            <span>Google Tasks</span>
+            <button class="btn-add-gtask" id="btn-show-gtask-form" onclick="toggleGTaskForm()">
+                <i class="fas fa-plus"></i> Add Task
+            </button>
+        </div>
+        <div class="tasks-pane-body">
+            <!-- Inline add form (hidden by default) -->
+            <div id="gtask-inline-form">
+                <input type="text" id="gtask-title-input" placeholder="Task title" maxlength="200">
+                <textarea id="gtask-notes-input" placeholder="Notes (optional)"></textarea>
+                <input type="date" id="gtask-due-input">
+                <div class="gtask-form-row">
+                    <button class="btn-gtask-save" onclick="createGTask()"><i class="fas fa-check"></i> Save</button>
+                    <button class="btn-gtask-cancel" onclick="toggleGTaskForm()">Cancel</button>
+                </div>
+            </div>
+            <!-- Tasks list -->
+            <div id="gtasks-list-body">
+                <div class="cal-event-empty">
+                    <i class="fas fa-check-circle"></i>
+                    Sign in with Google to view tasks
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Notes pane -->
+    <div class="intel-pane" id="pane-notes">
+        <div class="tasks-pane-header">
+            <span>Notes & Knowledge</span>
+            <button class="btn-add-gtask" id="btn-show-note-form" onclick="toggleNoteForm()">
+                <i class="fas fa-plus"></i> Add Note
+            </button>
+        </div>
+        <div class="tasks-pane-body">
+            <!-- Inline add form -->
+            <div id="note-inline-form">
+                <input type="text" id="note-title-input" placeholder="Note title" maxlength="200">
+                <textarea id="note-content-input" placeholder="Note content" rows="3"></textarea>
+                <input type="text" id="note-tags-input" placeholder="Tags (comma-separated, optional)">
+                <div class="gtask-form-row">
+                    <button class="btn-gtask-save" onclick="createNote()"><i class="fas fa-check"></i> Save</button>
+                    <button class="btn-gtask-cancel" onclick="toggleNoteForm()">Cancel</button>
+                </div>
+            </div>
+            <!-- Search -->
+            <div style="padding:8px 0;">
+                <input type="text" id="note-search-input" placeholder="Search notes…" style="width:100%;padding:6px 10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:8px;color:var(--text-primary);font-size:0.8rem;" onkeyup="if(event.key==='Enter')searchNotes()">
+            </div>
+            <!-- Notes list -->
+            <div id="notes-list-body">
+                <div class="cal-event-empty">
+                    <i class="fas fa-sticky-note"></i>
+                    Ask AgroSync to create notes, or add one here
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════
+     JAVASCRIPT
+═══════════════════════════════════════════════════════ -->
+<script>
+// ─── CONFIGURATION ────────────────────────────────────────────────────────────
+// Credentials are loaded from /config endpoint on page load (see loadAppConfig)
+let GOOGLE_CLIENT_ID = '';
+const CALENDAR_SCOPE   = [
+    'https://www.googleapis.com/auth/calendar.events',
+    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/tasks',
+    'https://www.googleapis.com/auth/userinfo.profile',
+    'https://www.googleapis.com/auth/userinfo.email'
+].join(' ');
+
+// Known APAC country coordinates for map markers
+const COUNTRY_COORDS = {
+    'India':       { lat: 20.59, lng: 78.96 },
+    'Nepal':       { lat: 28.39, lng: 84.12 },
+    'Vietnam':     { lat: 14.06, lng: 108.28 },
+    'Thailand':    { lat: 15.87, lng: 100.99 },
+    'China':       { lat: 35.86, lng: 104.19 },
+    'Japan':       { lat: 36.20, lng: 138.25 },
+    'Philippines': { lat: 12.87, lng: 121.77 },
+    'Indonesia':   { lat: -0.79, lng: 113.92 },
+    'Malaysia':    { lat: 4.21,  lng: 108.96 },
+    'Myanmar':     { lat: 21.91, lng: 95.96  },
+    'Bangladesh':  { lat: 23.68, lng: 90.36  },
+    'Sri Lanka':   { lat: 7.87,  lng: 80.77  },
+    'Pakistan':    { lat: 30.38, lng: 69.35  },
+    'Cambodia':    { lat: 12.57, lng: 104.99 },
+    'Laos':        { lat: 19.86, lng: 102.50 },'Malaysia':    { lat: 4.21,   lng: 101.97 },
+    'Cambodia':    { lat: 12.56,  lng: 104.99 },
+    'Laos':        { lat: 19.85,  lng: 102.49 },
+    'Myanmar':     { lat: 21.91,  lng: 95.95 },
+    'Mongolia':    { lat: 46.86,  lng: 103.84 },
+    'New Zealand': { lat: -40.90, lng: 174.88 },
+    'Papua New Guinea': { lat: -6.31, lng: 143.95 }
+};
+
+// ─── STATE ────────────────────────────────────────────────────────────────────
+let gTokenClient  = null;
+let gAccessToken  = null;
+let gMap          = null;
+let gMapMarkers   = [];
+let gSummaryData  = [];
+let isIntelOpen   = false;
+let currentIntelTab = 'map';
+
+// ─── DOM REFS ─────────────────────────────────────────────────────────────────
+const chatWindow = document.getElementById('chat-window');
+const userInput  = document.getElementById('user-input');
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXISTING LOGIC — PRESERVED EXACTLY
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// CONFIG LOADER — fetches /config and initialises Google services
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function loadAppConfig() {
+    try {
+        const res  = await fetch('/config');
+        const cfg  = await res.json();
+
+        // Set OAuth client ID
+        if (cfg.google_client_id) {
+            GOOGLE_CLIENT_ID = cfg.google_client_id;
+        }
+
+        // Dynamically load Google Maps JS if key is available
+        if (cfg.maps_api_key && !window.__mapsLoaded) {
+            window.__mapsLoaded = true;
+            const s   = document.createElement('script');
+            s.src     = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(cfg.maps_api_key)}&callback=initMap`;
+            s.async   = true;
+            s.defer   = true;
+            document.head.appendChild(s);
+        }
+    } catch (e) {
+        console.warn('Config fetch failed — Google services may be limited.', e);
+    }
+}
+
+window.onload = () => {
+    fetchSummary();
+    setTimeout(loadSidebarNotes, 2000); // Load sidebar notes after a short delay
+    appendMessage('bot', `### 👋 Welcome to AgroSync Intelligence.
+I am your APAC agricultural coordinator — powered by **Gemini 2.5 Flash** with tools served via **MCP**.
+
+**AlloyDB (via MCP):**
+* 🔍 **Query** farmers, inventory, and tasks (any column, any filter)
+* 📊 **Analytics** — stock, crop diversity, harvest tracking, task load (21+ metrics)
+* ✅ **Task Management** — create, **update**, delete tasks; overdue alerts
+* 👨‍🌾 **Farmer & Inventory** — create, update profiles and inventory items
+
+**Google Services (via MCP, sign in required):**
+* 📅 **Google Calendar** — schedule or delete farmer meetings; auto-embeds a map
+* ✅ **Google Tasks** — create or delete reminders; synced to AlloyDB
+* 🗺️ **Google Maps** — embed an interactive map for any location
+
+**Notes & Knowledge (via MCP):**
+* 📝 **Notes** — create, search, list, or delete notes linked to farmers or general knowledge. Use the Notes panel or just ask me.
+
+What would you like to know?`);
+
+    // Load config first (sets GOOGLE_CLIENT_ID + loads Maps), then init Google auth
+    loadAppConfig().then(() => {
+        setTimeout(initGoogleServices, 800);
+    });
+    // Set default date on schedule form to today
+    const today = new Date().toISOString().split('T')[0];
+    document.getElementById('evt-date').value = today;
+};
+
+async function fetchSummary() {
+    try {
+        const response = await fetch('/summary');
+        const data = await response.json();
+        gSummaryData = data.details || [];
+        let html = '';
+        data.details.forEach(item => {
+            html += `
+                <div class="summary-item">
+                    <div class="summary-country">${item.country} <span style="color:var(--text-muted);font-weight:400;font-size:0.7rem;">(${item.sub_region})</span></div>
+                    <div class="summary-crops">${item.crops}</div>
+                </div>
+            `;
+        });
+        document.getElementById('summary-content').innerHTML = html || '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px;">No data found.</div>';
+        // Update map markers if map is ready
+        if (gMap) updateMapMarkers();
+    } catch (e) {
+        document.getElementById('summary-content').innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px;">Sync failed.</div>';
+    }
+}
+
+async function sendMessage() {
+    const query = userInput.value.trim();
+    if (!query) return;
+
+    appendMessage('user', query);
+    userInput.value = '';
+
+    // Disable input while processing
+    userInput.disabled = true;
+    document.querySelector('.send-btn').disabled = true;
+
+    const requestId = 'r_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6);
+
+    // Insert live status element in chat (right after user message)
+    const statusEl = document.createElement('div');
+    statusEl.className = 'live-status';
+    statusEl.id = 'live-status-' + requestId;
+    statusEl.innerHTML = '<div class="status-dot"></div><span>Analyzing your request…</span>';
+    chatWindow.appendChild(statusEl);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+
+    // Open SSE stream for live status updates
+    let es = null;
+    try {
+        es = new EventSource('/status/' + requestId);
+        es.onmessage = function(e) {
+            try {
+                const d = JSON.parse(e.data);
+                if (d.done) { es.close(); return; }
+                if (d.status && statusEl) {
+                    statusEl.querySelector('span').textContent = d.status;
+                    chatWindow.scrollTop = chatWindow.scrollHeight;
+                }
+            } catch(err) {}
+        };
+        es.onerror = function() { es.close(); };
+    } catch(err) {
+        // SSE is optional enhancement — don't block
+    }
+
+    try {
+        const response = await fetch('/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: query, access_token: gAccessToken || '', request_id: requestId })
+        });
+        const data = await response.json();
+
+        // Remove live status, show bot response
+        if (statusEl && statusEl.parentNode) statusEl.remove();
+        appendMessage('bot', data.agent_response);
+
+        if (query.toLowerCase().match(/create|delete|add|remove/)) fetchSummary();
+        if (query.toLowerCase().match(/note|notes/)) setTimeout(loadSidebarNotes, 1000);
+
+        const farmerMatch = data.agent_response.match(/\*\*([A-Z][a-z]+ [A-Z][a-z]+)\*\*/);
+        if (farmerMatch) document.getElementById('evt-farmer').value = farmerMatch[1];
+
+    } catch (err) {
+        if (statusEl && statusEl.parentNode) statusEl.remove();
+        appendMessage('bot', '### ⚠️ Connection Lost\nBackend is unreachable.');
+    } finally {
+        if (es) try { es.close(); } catch(e) {}
+        userInput.disabled = false;
+        document.querySelector('.send-btn').disabled = false;
+        userInput.focus();
+    }
+}
+
+function appendMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = `message ${role}-message`;
+
+    // Allow maps embed HTML from bot responses (trusted backend output)
+    if (role === 'bot' && text.includes('maps-embed-wrapper')) {
+        // Sanitize but allow iframe with specific safe attrs
+        const clean = DOMPurify.sanitize(marked.parse(text), {
+            ADD_TAGS: ['iframe'],
+            ADD_ATTR: ['src', 'width', 'height', 'allowfullscreen', 'loading', 'referrerpolicy', 'frameborder', 'style']
+        });
+        div.innerHTML = clean;
+    } else {
+        div.innerHTML = DOMPurify.sanitize(marked.parse(text));
+    }
+    chatWindow.appendChild(div);
+    chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+function handleKey(e) { if (e.key === 'Enter') sendMessage(); }
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOOGLE IDENTITY SERVICES (OAuth2)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function initGoogleServices() {
+    // Init GIS token client
+    if (typeof google !== 'undefined' && google.accounts) {
+        gTokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: GOOGLE_CLIENT_ID,
+            scope: CALENDAR_SCOPE,
+            callback: handleTokenResponse,
+        });
+    } else {
+        // Retry if library hasn't loaded yet
+        setTimeout(initGoogleServices, 600);
+        return;
+    }
+
+    // Show auth modal after a polished delay
+    setTimeout(showAuthModal, 600);
+}
+
+function handleTokenResponse(tokenResponse) {
+    if (tokenResponse.error) {
+        showToast('Google sign-in failed: ' + tokenResponse.error, 'error');
+        return;
+    }
+    gAccessToken = tokenResponse.access_token;
+    fetchGoogleUserInfo();
+    closeAuthModal();
+    enableCalendarFeatures();
+    loadUpcomingEvents();
+}
+
+async function fetchGoogleUserInfo() {
+    try {
+        const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+            headers: { Authorization: `Bearer ${gAccessToken}` }
+        });
+        const user = await res.json();
+
+        // Update sidebar user card
+        document.getElementById('g-user-name').textContent = user.name || user.email;
+        const avatarWrap = document.getElementById('g-avatar-wrap');
+        if (user.picture) {
+            avatarWrap.innerHTML = `<img class="g-avatar" src="${user.picture}" alt="${user.name}">`;
+        }
+        document.getElementById('google-user-card').classList.add('visible');
+        document.getElementById('sidebar-signin-prompt').style.display = 'none';
+
+        // Update header avatar
+        if (user.picture) {
+            document.getElementById('header-avatar').innerHTML = `<img src="${user.picture}" alt="${user.name}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">`;
+        }
+
+        showToast('✓ Google Calendar connected', 'success');
+    } catch (e) {
+        console.error('Failed to fetch user info:', e);
+    }
+}
+
+function enableCalendarFeatures() {
+    // Calendar and Tasks are always visible in the header — no toggle needed
+    // Auto-load tasks when signed in
+    setTimeout(loadGTasks, 400);
+}
+
+function signInWithGoogle() {
+    if (gTokenClient) {
+        gTokenClient.requestAccessToken({ prompt: 'consent' });
+    } else {
+        // Fallback: reinit and retry
+        initGoogleServices();
+        setTimeout(() => {
+            if (gTokenClient) gTokenClient.requestAccessToken({ prompt: 'consent' });
+            else showToast('Google services not loaded yet. Try again.', 'error');
+        }, 1200);
+    }
+}
+
+function signOut() {
+    if (gAccessToken) {
+        google.accounts.oauth2.revoke(gAccessToken, () => {});
+    }
+    gAccessToken = null;
+    document.getElementById('google-user-card').classList.remove('visible');
+    document.getElementById('sidebar-signin-prompt').style.display = '';
+    document.getElementById('header-avatar').innerHTML = '<i class="fas fa-user-circle" style="font-size:1.1rem;color:var(--text-muted);"></i>';
+    document.getElementById('cal-events-body').innerHTML = `
+        <div class="cal-event-empty">
+            <i class="fas fa-calendar-alt"></i>
+            Sign in with Google to view upcoming meetings
+        </div>`;
+    showToast('Signed out from Google', 'success');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOOGLE CALENDAR
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function loadUpcomingEvents() {
+    if (!gAccessToken) return;
+    try {
+        const res = await fetch('/mcp/calendar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list_events', access_token: gAccessToken, max_results: 10 })
+        });
+        const data = await res.json();
+        if (data.events) {
+            renderCalendarEvents(data.events.map(e => ({
+                summary: e.title, start: { dateTime: e.start }, id: e.event_id, location: e.location
+            })));
+        }
+    } catch (e) {
+        console.error('Failed to load calendar events:', e);
+    }
+}
+
+function renderCalendarEvents(events) {
+    const body = document.getElementById('cal-events-body');
+    if (!events.length) {
+        body.innerHTML = `
+            <div class="cal-event-empty">
+                <i class="fas fa-calendar-check"></i>
+                No upcoming meetings in the next 30 days
+            </div>`;
+        return;
+    }
+    body.innerHTML = events.map(evt => {
+        const startRaw = evt.start?.dateTime || evt.start?.date || '';
+        const start = startRaw ? new Date(startRaw) : null;
+        const timeStr = start
+            ? start.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) + ' · ' +
+              start.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })
+            : 'All day';
+        return `
+            <div class="cal-event-card">
+                <div class="cal-event-title">${DOMPurify.sanitize(evt.summary || 'Untitled')}</div>
+                <div class="cal-event-time">${timeStr}</div>
+            </div>`;
+    }).join('');
+}
+
+async function createCalendarEvent() {
+    if (!gAccessToken) {
+        showToast('Please sign in with Google first', 'error');
+        return;
+    }
+
+    const title    = document.getElementById('evt-title').value.trim();
+    const farmer   = document.getElementById('evt-farmer').value.trim();
+    const date     = document.getElementById('evt-date').value;
+    const time     = document.getElementById('evt-time').value;
+    const duration = parseInt(document.getElementById('evt-duration').value);
+    const desc     = document.getElementById('evt-desc').value.trim();
+    const addMeet  = document.getElementById('evt-meet').checked;
+
+    if (!title || !date || !time) {
+        showToast('Title, date and time are required', 'error');
+        return;
+    }
+
+    const startDT = new Date(`${date}T${time}:00`);
+    const endDT   = new Date(startDT.getTime() + duration * 60 * 1000);
+
+    const eventBody = {
+        summary: farmer ? `${title} — ${farmer}` : title,
+        description: desc || `AgroSync farmer meeting${farmer ? ` with ${farmer}` : ''}.`,
+        start: { dateTime: startDT.toISOString(), timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+        end:   { dateTime: endDT.toISOString(),   timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone },
+    };
+
+    if (addMeet) {
+        eventBody.conferenceData = {
+            createRequest: {
+                requestId: `agrosync-${Date.now()}`,
+                conferenceSolutionKey: { type: 'hangoutsMeet' }
+            }
+        };
+    }
+
+    const createBtn = document.getElementById('create-event-btn');
+    createBtn.disabled = true;
+    createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating…';
+
+    try {
+        const res = await fetch('/mcp/calendar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                action: 'create_event',
+                access_token: gAccessToken,
+                title: farmer ? `${title} — ${farmer}` : title,
+                description: desc || `AgroSync farmer meeting${farmer ? ` with ${farmer}` : ''}.`,
+                start_datetime: startDT.toISOString(),
+                end_datetime: endDT.toISOString(),
+                add_meet_link: addMeet
+            })
+        });
+
+        const evt = await res.json();
+        if (evt.error) throw new Error(evt.error);
+
+        closeScheduleModal();
+        showToast('✓ Meeting created via MCP → Google Calendar', 'success');
+        loadUpcomingEvents();
+
+        // Append confirmation to chat
+        const meetLink = evt.meet_link ? `\n📹 **Google Meet:** ${evt.meet_link}` : '';
+        appendMessage('bot',
+            `📅 **Meeting Scheduled**\n\n` +
+            `| Field | Detail |\n|---|---|\n` +
+            `| **Title** | ${evt.title || title} |\n` +
+            `| **Date** | ${startDT.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'long', year: 'numeric' })} |\n` +
+            `| **Time** | ${startDT.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} — ${endDT.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })} |\n` +
+            (farmer ? `| **Farmer** | ${farmer} |\n` : '') +
+            `| **Status** | ✅ Confirmed |` +
+            meetLink
+        );
+    } catch (e) {
+        showToast('Failed to create event: ' + e.message, 'error');
+    } finally {
+        createBtn.disabled = false;
+        createBtn.innerHTML = '<i class="fas fa-calendar-check"></i> Create Event';
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOOGLE MAPS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// Called by the Maps API script (callback=initMap in script src)
+window.initMap = function () {
+    const mapEl = document.getElementById('google-map');
+    const placeholder = document.getElementById('map-placeholder');
+    if (placeholder) placeholder.remove();
+
+    const DARK_STYLE = [
+        { elementType: 'geometry',            stylers: [{ color: '#0a0f1e' }] },
+        { elementType: 'labels.text.stroke',  stylers: [{ color: '#0a0f1e' }] },
+        { elementType: 'labels.text.fill',    stylers: [{ color: '#4b5563' }] },
+        { featureType: 'water',               elementType: 'geometry', stylers: [{ color: '#060e1c' }] },
+        { featureType: 'road',                stylers: [{ visibility: 'off' }] },
+        { featureType: 'transit',             stylers: [{ visibility: 'off' }] },
+        { featureType: 'poi',                 stylers: [{ visibility: 'off' }] },
+        { featureType: 'administrative.country', elementType: 'geometry.stroke', stylers: [{ color: '#1e3355' }, { weight: 1 }] },
+        { featureType: 'administrative.country', elementType: 'labels.text.fill', stylers: [{ color: '#475569' }] },
+        { featureType: 'landscape.natural',   elementType: 'geometry', stylers: [{ color: '#0d1a2d' }] },
+    ];
+
+    gMap = new google.maps.Map(mapEl, {
+        center: { lat: 15, lng: 100 },
+        zoom: 3,
+        disableDefaultUI: true,
+        zoomControl: true,
+        zoomControlOptions: { position: google.maps.ControlPosition.RIGHT_BOTTOM },
+        styles: DARK_STYLE,
+        backgroundColor: '#070c18',
+    });
+
+    // Add markers from already-loaded summary data
+    if (gSummaryData.length) updateMapMarkers();
+};
+
+function updateMapMarkers() {
+    if (!gMap) return;
+
+    // Clear existing markers
+    gMapMarkers.forEach(m => m.setMap(null));
+    gMapMarkers = [];
+
+    // Group by country
+    const countryMap = {};
+    gSummaryData.forEach(item => {
+        if (!countryMap[item.country]) {
+            countryMap[item.country] = { crops: '', region: item.sub_region };
+        }
+        countryMap[item.country].crops += (countryMap[item.country].crops ? ', ' : '') + item.crops;
+    });
+
+    Object.entries(countryMap).forEach(([country, info]) => {
+        const coords = COUNTRY_COORDS[country];
+        if (!coords) return;
+
+        // Custom marker SVG (green pin)
+        const svgMarker = {
+            path: 'M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z',
+            fillColor: '#22c55e',
+            fillOpacity: 1,
+            strokeColor: '#166534',
+            strokeWeight: 1.5,
+            scale: 1.5,
+            anchor: new google.maps.Point(12, 22),
+        };
+
+        const marker = new google.maps.Marker({
+            position: coords,
+            map: gMap,
+            title: country,
+            icon: svgMarker,
+            animation: google.maps.Animation.DROP,
+        });
+
+        const infoWindow = new google.maps.InfoWindow({
+            content: `
+                <div style="font-family:Outfit,sans-serif;background:#0d1525;color:#e2e8f0;padding:10px 12px;border-radius:8px;min-width:160px;border:1px solid rgba(99,179,255,0.1);">
+                    <div style="font-weight:700;color:#22c55e;margin-bottom:4px;font-size:0.9rem;">${country}</div>
+                    <div style="font-size:0.75rem;color:#94a3b8;line-height:1.5;">${info.crops || 'No crop data'}</div>
+                    <div style="font-size:0.7rem;color:#475569;margin-top:4px;">${info.region}</div>
+                </div>`,
+            disableAutoPan: false,
+        });
+
+        marker.addListener('click', () => {
+            infoWindow.open({ anchor: marker, map: gMap });
+        });
+
+        gMapMarkers.push(marker);
+    });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// UI CONTROLS
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function showAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    modal.classList.remove('hidden');
+}
+
+function closeAuthModal() {
+    const modal = document.getElementById('auth-modal');
+    modal.classList.add('hidden');
+    setTimeout(() => { modal.style.display = 'none'; }, 280);
+}
+
+function skipAuth() {
+    closeAuthModal();
+    showToast('Continuing without Google Calendar', 'success');
+}
+
+function openSidebar() {
+    document.getElementById('sidebar').classList.add('open');
+    document.getElementById('sidebar-overlay').classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+    document.getElementById('sidebar').classList.remove('open');
+    document.getElementById('sidebar-overlay').classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+function toggleIntelPanel() {
+    isIntelOpen = !isIntelOpen;
+    const panel = document.getElementById('intel-panel');
+    panel.classList.toggle('open', isIntelOpen);
+    _syncHeaderBtns();
+
+    // Trigger map resize after panel animates open
+    if (isIntelOpen && gMap) {
+        setTimeout(() => {
+            google.maps.event.trigger(gMap, 'resize');
+        }, 320);
+    }
+}
+
+// Open the intel panel directly on a specific tab
+function openPanel(tab) {
+    const panel = document.getElementById('intel-panel');
+    if (!isIntelOpen) {
+        isIntelOpen = true;
+        panel.classList.add('open');
+    }
+    switchIntelTab(tab);
+    _syncHeaderBtns();
+}
+
+// Keep header button active states in sync with panel state
+function _syncHeaderBtns() {
+    const btns = ['map', 'calendar', 'tasks', 'notes'];
+    btns.forEach(t => {
+        const btn = document.getElementById(`hdr-btn-${t}`);
+        if (!btn) return;
+        btn.classList.remove('active', 'cal-active');
+        if (isIntelOpen && currentIntelTab === t) {
+            btn.classList.add(t === 'calendar' ? 'cal-active' : 'active');
+        }
+    });
+}
+
+function switchIntelTab(tab) {
+    currentIntelTab = tab;
+    document.querySelectorAll('.intel-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.intel-pane').forEach(p => p.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    document.getElementById(`pane-${tab}`).classList.add('active');
+
+    if (tab === 'map' && gMap) {
+        setTimeout(() => google.maps.event.trigger(gMap, 'resize'), 50);
+    }
+    if (tab === 'calendar' && gAccessToken) {
+        loadUpcomingEvents();
+    }
+    if (tab === 'tasks' && gAccessToken) {
+        loadGTasks();
+    }
+    if (tab === 'notes') {
+        loadNotes();
+    }
+    _syncHeaderBtns();
+}
+
+function openScheduleModal() {
+    if (!gAccessToken) {
+        showAuthModal();
+        return;
+    }
+    document.getElementById('schedule-modal').classList.add('open');
+}
+
+function closeScheduleModal() {
+    document.getElementById('schedule-modal').classList.remove('open');
+}
+
+// Close schedule modal on backdrop click
+document.getElementById('schedule-modal').addEventListener('click', function(e) {
+    if (e.target === this) closeScheduleModal();
+});
+
+function showToast(msg, type = 'success') {
+    const toast = document.getElementById('toast');
+    toast.textContent = msg;
+    toast.className = `show ${type}`;
+    setTimeout(() => { toast.className = ''; }, 3200);
+}
+
+// Close sidebar on Escape
+document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+        closeSidebar();
+        closeScheduleModal();
+    }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// GOOGLE TASKS — routed through Flask → MCP Server → Google Tasks API
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function loadGTasks() {
+    if (!gAccessToken) return;
+    const body = document.getElementById('gtasks-list-body');
+    body.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 0;">Loading…</div>';
+    try {
+        const res = await fetch('/mcp/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'list_tasks', access_token: gAccessToken })
+        });
+        const data = await res.json();
+        if (data.tasks) {
+            renderGTasks(data.tasks.map(t => ({
+                id: t.task_id, title: t.title, notes: t.notes, due: t.due, status: t.status
+            })));
+        } else {
+            body.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 0;">No tasks found.</div>';
+        }
+    } catch (e) {
+        body.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 0;">Failed to load tasks.</div>';
+    }
+}
+
+function renderGTasks(tasks) {
+    const body = document.getElementById('gtasks-list-body');
+    if (!tasks.length) {
+        body.innerHTML = `
+            <div class="cal-event-empty">
+                <i class="fas fa-check-circle"></i>
+                No tasks yet
+            </div>`;
+        return;
+    }
+    body.innerHTML = tasks.map(t => {
+        const due = t.due ? t.due.substring(0, 10) : '';
+        const notes = t.notes ? `<div class="gtask-notes">${DOMPurify.sanitize(t.notes)}</div>` : '';
+        const dueHtml = due ? `<div class="gtask-due">Due ${due}</div>` : '';
+        return `
+            <div class="gtask-card" id="gtask-${t.id}">
+                <div class="gtask-check"></div>
+                <div class="gtask-body">
+                    <div class="gtask-title">${DOMPurify.sanitize(t.title || 'Untitled')}</div>
+                    ${notes}${dueHtml}
+                </div>
+                <button class="gtask-del-btn" onclick="deleteGTask('${t.id}')" title="Delete task">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>`;
+    }).join('');
+}
+
+function toggleGTaskForm() {
+    const form = document.getElementById('gtask-inline-form');
+    form.classList.toggle('visible');
+    if (form.classList.contains('visible')) {
+        document.getElementById('gtask-title-input').focus();
+    }
+}
+
+async function createGTask() {
+    if (!gAccessToken) { showToast('Sign in with Google first', 'error'); return; }
+    const title   = document.getElementById('gtask-title-input').value.trim();
+    const notes   = document.getElementById('gtask-notes-input').value.trim();
+    const dueDate = document.getElementById('gtask-due-input').value;
+    if (!title) { showToast('Task title is required', 'error'); return; }
+
+    const reqBody = { action: 'create_task', access_token: gAccessToken, title };
+    if (notes)   reqBody.notes = notes;
+    if (dueDate) reqBody.due_date = new Date(dueDate).toISOString();
+
+    try {
+        const res = await fetch('/mcp/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(reqBody)
+        });
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+        document.getElementById('gtask-title-input').value = '';
+        document.getElementById('gtask-notes-input').value = '';
+        document.getElementById('gtask-due-input').value   = '';
+        toggleGTaskForm();
+        showToast('✓ Task added via MCP → Google Tasks', 'success');
+        loadGTasks();
+    } catch (e) {
+        showToast('Failed to create task: ' + e.message, 'error');
+    }
+}
+
+async function deleteGTask(taskId) {
+    if (!gAccessToken) return;
+    try {
+        const res = await fetch('/mcp/tasks', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'delete_task', access_token: gAccessToken, task_id: taskId })
+        });
+        const data = await res.json();
+        if (data.status === 'SUCCESS') {
+            document.getElementById(`gtask-${taskId}`)?.remove();
+            showToast('✓ Task deleted via MCP', 'success');
+            loadGTasks();
+        } else {
+            throw new Error(data.error || 'Delete failed');
+        }
+    } catch (e) {
+        showToast('Failed to delete task: ' + e.message, 'error');
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// MCP — GOOGLE MAPS (request snippet from backend for use in chat or manual embed)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function requestMapsSnippet(location) {
+    try {
+        const res = await fetch('/mcp/maps_snippet', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ location })
+        });
+        const data = await res.json();
+        if (data.maps_snippet) {
+            appendMessage('bot', `📍 **Map: ${location}**\n\n${data.maps_snippet}`);
+        }
+    } catch (e) {
+        showToast('Maps request failed', 'error');
+    }
+}
+
+// Auto-scan bot messages for location keywords and offer a map
+function maybeOfferMap(text) {
+    // Only trigger if message mentions "location:", "venue:", or "at <Place>" near a calendar action
+    const locationMatch = text.match(/(?:location|venue|at|held at)[:\s]+([A-Z][^,\n.]{4,60})/i);
+    if (locationMatch && gAccessToken) {
+        const loc = locationMatch[1].trim();
+        // Only auto-embed if not already present
+        if (!text.includes('maps-embed-wrapper')) {
+            requestMapsSnippet(loc);
+        }
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// NOTES — AlloyDB-backed knowledge management
+// ═══════════════════════════════════════════════════════════════════════════════
+
+function toggleNoteForm() {
+    const form = document.getElementById('note-inline-form');
+    form.classList.toggle('visible');
+    if (form.classList.contains('visible')) {
+        document.getElementById('note-title-input').focus();
+    }
+}
+
+async function loadNotes() {
+    const body = document.getElementById('notes-list-body');
+    body.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 0;">Loading…</div>';
+    try {
+        const res = await fetch('/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: 'List all my notes', access_token: gAccessToken || '' })
+        });
+        const data = await res.json();
+        body.innerHTML = `<div style="font-size:0.8rem;color:var(--text-secondary);padding:4px 0;">${DOMPurify.sanitize(marked.parse(data.agent_response))}</div>`;
+    } catch (e) {
+        body.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 0;">Failed to load notes.</div>';
+    }
+}
+
+async function createNote() {
+    const title   = document.getElementById('note-title-input').value.trim();
+    const content = document.getElementById('note-content-input').value.trim();
+    const tags    = document.getElementById('note-tags-input').value.trim();
+    if (!title || !content) { showToast('Title and content are required', 'error'); return; }
+
+    const query = `Create a note titled "${title}" with content: ${content}` + (tags ? ` Tags: ${tags}` : '');
+    try {
+        const res = await fetch('/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, access_token: gAccessToken || '' })
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        document.getElementById('note-title-input').value = '';
+        document.getElementById('note-content-input').value = '';
+        document.getElementById('note-tags-input').value = '';
+        toggleNoteForm();
+        showToast('✓ Note saved', 'success');
+        loadNotes();
+        loadSidebarNotes();
+    } catch (e) {
+        showToast('Failed to create note: ' + e.message, 'error');
+    }
+}
+
+async function searchNotes() {
+    const q = document.getElementById('note-search-input').value.trim();
+    if (!q) { loadNotes(); return; }
+    const body = document.getElementById('notes-list-body');
+    body.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 0;">Searching…</div>';
+    try {
+        const res = await fetch('/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: `Search my notes for: ${q}`, access_token: gAccessToken || '' })
+        });
+        const data = await res.json();
+        body.innerHTML = `<div style="font-size:0.8rem;color:var(--text-secondary);padding:4px 0;">${DOMPurify.sanitize(marked.parse(data.agent_response))}</div>`;
+    } catch (e) {
+        body.innerHTML = '<div style="color:var(--text-muted);font-size:0.8rem;padding:8px 0;">Search failed.</div>';
+    }
+}
+
+async function loadSidebarNotes() {
+    const el = document.getElementById('sidebar-notes');
+    if (!el) return;
+    try {
+        const res = await fetch('/ask', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query: 'List my 5 most recent notes briefly', access_token: gAccessToken || '' })
+        });
+        const data = await res.json();
+        const html = DOMPurify.sanitize(marked.parse(data.agent_response));
+        if (html && !html.includes('NOT_FOUND') && !html.includes('No notes')) {
+            el.innerHTML = `<div style="font-size:0.75rem;color:var(--text-secondary);line-height:1.5;padding:4px 0;">${html}</div>`;
+        }
+    } catch (e) { /* silent fail — sidebar notes are optional */ }
+}
+
+</script>
+</body>
+</html>
