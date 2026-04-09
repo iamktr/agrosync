@@ -77,7 +77,7 @@ We provide a dedicated bash script to build the required GCP infrastructure (VPC
 ```bash
 chmod +x setup-infra.sh
 ./setup-infra.sh
-
+```
 ---
 
 ## ⚡ Quick Start
