@@ -77,3 +77,19 @@ We provide a dedicated bash script to build the required GCP infrastructure (VPC
 ```bash
 chmod +x setup-infra.sh
 ./setup-infra.sh
+
+---
+
+## ⚡ Quick Start
+
+AgroSync is designed for rapid, reproducible deployment on Google Cloud. 
+
+1. **Infrastructure:** Run `./setup-infra.sh` to automatically provision the custom VPC, subnets, and the AlloyDB cluster.
+2. **Configuration:** Run `./setup.sh` to generate the environment footprint and Dockerfile.
+3. **Deployment:** Execute `./deploy.sh` to push the container to Google Cloud Run, automatically configuring the necessary VPC egress rules.
+
+> **🔒 Security Architecture:** The AlloyDB database sits securely in a private subnet utilizing VPC peering, entirely isolated from the public internet. Google Workspace interactions are handled via client-side Google Identity Services (OAuth2), ensuring user credentials are **never** stored on our servers.
+
+---
+
+*Engineered and developed for the Gen AI Academy Hackathon.*
